@@ -44,8 +44,8 @@ def predict_games(date_str=None):
         for game in date.get('games', []):
             away = game['teams']['away']
             home = game['teams']['home']
-            v_team = away['team']['abbreviation']
-            h_team = home['team']['abbreviation']
+            v_team = away['team'].get('abbreviation', away['team'].get('name', 'UNK'))
+            h_team = home['team'].get('abbreviation', home['team'].get('name', 'UNK'))
             
             mapping = {"LAD": "LAN", "SF": "SFN", "NYM": "NYN", "NYY": "NYA", "CHC": "CHN", "CWS": "CHA", "KC": "KCA", "TB": "TBA", "SD": "SDN", "WSH": "WAS"}
             v_t = mapping.get(v_team, v_team)
@@ -65,13 +65,17 @@ def predict_games(date_str=None):
             h_l_stat = 0.5
             # In a real scenario, iterate through lineups and call name_to_id
             
-            features = [[
+            feature_cols = [
+                'v_win_pct', 'v_runs', 'h_win_pct', 'h_runs', 
+                'v_p_stat', 'h_p_stat', 'v_l_stat', 'h_l_stat'
+            ]
+            features = pd.DataFrame([[
                 get_avg(STATE['team_wins'].get(v_t, []), 0.5),
                 get_avg(STATE['team_runs'].get(v_t, []), 4.0),
                 get_avg(STATE['team_wins'].get(h_t, []), 0.5),
                 get_avg(STATE['team_runs'].get(h_t, []), 4.0),
                 v_p_stat, h_p_stat, v_l_stat, h_l_stat
-            ]]
+            ]], columns=feature_cols)
             
             prob = MODEL.predict_proba(features)[0][1]
             predictions.append({
