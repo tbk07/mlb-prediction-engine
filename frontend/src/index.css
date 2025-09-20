@@ -1,0 +1,114 @@
+:root {
+  --primary: #002d72;
+  --secondary: #d50032;
+  --bg: #f4f7f6;
+  --card-bg: #ffffff;
+  --text: #333333;
+  --success: #28a745;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+h1 { margin: 0; font-size: 2.5rem; }
+p.subtitle { opacity: 0.9; margin-top: 0.5rem; }
+
+.match-grid {
+  display: grid;
+  gap: 2rem;
+}
+
+.match-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  transition: transform 0.2s;
+}
+
+.match-card:hover { transform: translateY(-4px); }
+
+.match-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 1rem;
+}
+
+.teams { font-size: 1.25rem; font-weight: 700; color: var(--primary); }
+
+.probability-bar {
+  height: 24px;
+  background: #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  margin: 1rem 0;
+}
+
+.prob-fill {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: width 1s ease-in-out;
+}
+
+.away-fill { background-color: var(--secondary); }
+.home-fill { background-color: var(--primary); }
+
+.scouting-report {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-left: 4px solid var(--primary);
+  border-radius: 4px;
+}
+
+.scouting-report h4 { margin-top: 0; color: var(--primary); }
+.reasoning-list { padding-left: 1.25rem; margin: 0; }
+.reasoning-list li { margin-bottom: 0.5rem; line-height: 1.4; }
+
+.pitchers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.pitcher-info { color: #666; }
+.pitcher-info strong { color: var(--text); }
+
+.model-explanation {
+  margin-top: 4rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #eee;
+}
