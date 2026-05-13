@@ -64,6 +64,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 120px;
+  text-align: center;
 }
 
 .team-logo {
@@ -71,6 +73,55 @@ body {
   height: 60px;
   object-fit: contain;
   margin-bottom: 0.5rem;
+}
+
+.team-name {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.team-abbr,
+.muted,
+.venue,
+.game-meta {
+  color: var(--text-secondary);
+}
+
+.team-abbr {
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+.game-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.86rem;
+  margin-bottom: 0.35rem;
+}
+
+.venue {
+  text-align: center;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
+}
+
+.table-summary {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.history-matchup {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 360px;
+}
+
+.history-matchup .team-logo {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 0;
 }
 
 .prob-bar-container {
