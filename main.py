@@ -111,6 +111,25 @@ def load_artifacts():
             explainer = shap.TreeExplainer(model)
         except Exception:
             explainer = None
+    
+    # Run data pipeline and feature engineering automatically on startup
+    # This ensures Render always has the latest odds and predictions
+    try:
+        from pipeline.fetch_data import fetch_mlb_api_2026, fetch_odds
+        from pipeline.features import compute_features
+        
+        print("Startup: Updating MLB schedule and scores...")
+        fetch_mlb_api_2026()
+        
+        print("Startup: Fetching latest market odds...")
+        fetch_odds()
+        
+        print("Startup: Re-calculating model features...")
+        compute_features()
+        
+        print("Startup update complete. Application is ready.")
+    except Exception as e:
+        print(f"Startup update failed: {e}")
 
 
 def get_db():
