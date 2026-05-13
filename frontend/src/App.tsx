@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { AlertCircle, ChevronDown, ChevronUp, TrendingUp, History } from 'lucide-react';
+import { XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { ChevronDown, ChevronUp, TrendingUp, History } from 'lucide-react';
 
 interface Game {
   gamePk: string;
