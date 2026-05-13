@@ -19,7 +19,25 @@ MLB_TEAM_ID_TO_ABBR = {
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS games (gamePk TEXT PRIMARY KEY, date TEXT, season INTEGER, v_team TEXT, h_team TEXT, v_score INTEGER, h_score INTEGER, park_name TEXT, park_id TEXT, altitude_flag INTEGER, roof_type TEXT, temperature INTEGER, v_p_starter TEXT, h_p_starter TEXT, v_p_hand TEXT, h_p_hand TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS games (
+        gamePk TEXT PRIMARY KEY, 
+        date TEXT, 
+        season INTEGER, 
+        v_team TEXT, 
+        h_team TEXT, 
+        v_score INTEGER, 
+        h_score INTEGER, 
+        status TEXT,
+        park_name TEXT, 
+        park_id TEXT, 
+        altitude_flag INTEGER, 
+        roof_type TEXT, 
+        temperature INTEGER, 
+        v_p_starter TEXT, 
+        h_p_starter TEXT, 
+        v_p_hand TEXT, 
+        h_p_hand TEXT
+    )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS odds (gamePk TEXT PRIMARY KEY, home_ml INTEGER, away_ml INTEGER, over_under REAL)''')
     conn.commit()
     conn.close()
@@ -50,11 +68,12 @@ def fetch_mlb_api_2026():
             
             v_score = game['teams']['away'].get('score', 0)
             h_score = game['teams']['home'].get('score', 0)
+            status = game.get('status', {}).get('abstractGameState', 'Unknown')
             
             cursor.execute('''
-            INSERT OR REPLACE INTO games (gamePk, date, season, v_team, h_team, v_score, h_score)
-            VALUES (?, ?, 2026, ?, ?, ?, ?)
-            ''', (gamePk, date_item['date'], v_team, h_team, v_score, h_score))
+            INSERT OR REPLACE INTO games (gamePk, date, season, v_team, h_team, v_score, h_score, status)
+            VALUES (?, ?, 2026, ?, ?, ?, ?, ?)
+            ''', (gamePk, date_item['date'], v_team, h_team, v_score, h_score, status))
                         
     conn.commit()
     conn.close()

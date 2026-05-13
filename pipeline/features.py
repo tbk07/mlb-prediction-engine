@@ -40,7 +40,7 @@ def compute_features():
     K_PITCHER = 32
     K_BATTER = 20
     K_TEAM = 16
-    HFA = 30
+    HFA = 35
     DEFAULT_ELO = 1500
     
     def get_p_elo(p): return pitcher_elo.get(p, DEFAULT_ELO)
@@ -49,6 +49,7 @@ def compute_features():
     
     features_list = []
     
+    current_season = None
     print(f"Processing {len(games_df)} games...")
     
     for i, row in games_df.iterrows():
@@ -57,6 +58,16 @@ def compute_features():
         h = row['h_team']
         vp = row['v_p_starter']
         hp = row['h_p_starter']
+        season = row['season']
+        
+        # --- Season Regression ---
+        if current_season is not None and season != current_season:
+            # Regress 50% towards 1500 between seasons to keep ratings grounded
+            for p in pitcher_elo: pitcher_elo[p] = 0.5 * pitcher_elo[p] + 0.5 * 1500
+            for b in batter_elo: batter_elo[b] = 0.5 * batter_elo[b] + 0.5 * 1500
+            for t in bullpen_elo: bullpen_elo[t] = 0.5 * bullpen_elo[t] + 0.5 * 1500
+        current_season = season
+
         date_str = str(row['date'])
         if len(date_str) < 10:
             date_dt = pd.to_datetime(date_str, format="%Y%m%d")
@@ -108,7 +119,6 @@ def compute_features():
                 else:
                     res[f'{w}_win_pct'] = np.mean([x['win'] for x in recent])
                     ab, h_hit, h2, h3, hr, bb = sum(x['ab'] for x in recent), sum(x['h'] for x in recent), sum(x['2b'] for x in recent), sum(x['3b'] for x in recent), sum(x['hr'] for x in recent), sum(x['bb'] for x in recent)
-                    sf = 0 # approx
                     obp = (h_hit + bb) / max(ab + bb, 1)
                     slg = (h_hit + h2 + 2*h3 + 3*hr) / max(ab, 1)
                     res[f'{w}_ops'] = obp + slg
@@ -132,11 +142,11 @@ def compute_features():
                     res[f'{w}_bb9'] = 3.0
                 else:
                     er, h_allow, bb, k, ip = sum(x['er'] for x in recent), sum(x['h'] for x in recent), sum(x['bb'] for x in recent), sum(x['k'] for x in recent), sum(x['ip'] for x in recent)
-                    ip_mod = max(ip, w * 3.0)
-                    res[f'{w}_era'] = ((er + (5/9)*(ip_mod-ip))/ip_mod)*9
-                    res[f'{w}_whip'] = (h_allow+bb)/ip_mod
-                    res[f'{w}_k9'] = (k/ip_mod)*9
-                    res[f'{w}_bb9'] = (bb/ip_mod)*9
+                    ip_mod = max(ip, 0.1)
+                    res[f'{w}_era'] = (er / ip_mod) * 9
+                    res[f'{w}_whip'] = (h_allow + bb) / ip_mod
+                    res[f'{w}_k9'] = (k / ip_mod) * 9
+                    res[f'{w}_bb9'] = (bb / ip_mod) * 9
             
             # Days rest & pitch count
             if hist:
@@ -213,52 +223,80 @@ def compute_features():
             
         features_list.append(feat_row)
         
-        # --- ELO & STATE UPDATES ---
-        h_win = 1 if row['h_score'] > row['v_score'] else 0
+        # --- ELO & STATE UPDATES (Only for Completed Games) ---
+        status = row.get('status', 'Final')
+        is_completed = (status == 'Final') or (row['v_score'] + row['h_score'] > 0 and status != 'Preview')
         
-        # Pitcher Elo update (use runs allowed vs expected roughly)
-        # Expected runs ~ 4.5.
-        v_er = row['h_score'] # proxy
-        h_er = row['v_score'] # proxy
-        
-        v_p_s = max(0, min(1, 0.5 + (4.5 - v_er)/9))
-        h_p_s = max(0, min(1, 0.5 + (4.5 - h_er)/9))
-        
-        pitcher_elo[vp] = v_p_elo + K_PITCHER * (v_p_s - (1 - exp_h))
-        pitcher_elo[hp] = h_p_elo + K_PITCHER * (h_p_s - exp_h)
-        
-        # Batter Elo
-        # Simple update based on whether team scored > 4.5 runs
-        if v_batters:
-            v_off_s = max(0, min(1, 0.5 + (row['v_score'] - 4.5)/9))
-            for b in v_batters: batter_elo[b] = get_b_elo(b) + K_BATTER * (v_off_s - (1 - exp_h))
-        if h_batters:
-            h_off_s = max(0, min(1, 0.5 + (row['h_score'] - 4.5)/9))
-            for b in h_batters: batter_elo[b] = get_b_elo(b) + K_BATTER * (h_off_s - exp_h)
+        if is_completed:
+            h_win = 1 if row['h_score'] > row['v_score'] else 0
             
-        # Update rolling stats
-        # Visitor
-        v_game_stat = {'date': date_dt, 'win': 1-h_win, 'rs': row['v_score'], 'ra': row['h_score'], 'err': 0, 'ab': 33, 'h': 8, '2b': 2, '3b': 0, 'hr': 1, 'bb': 3, 'sb': 0, 'cs': 0}
-        h_game_stat = {'date': date_dt, 'win': h_win, 'rs': row['h_score'], 'ra': row['v_score'], 'err': 0, 'ab': 33, 'h': 8, '2b': 2, '3b': 0, 'hr': 1, 'bb': 3, 'sb': 0, 'cs': 0}
-        
-        if v not in team_stats: team_stats[v] = deque(maxlen=162)
-        if h not in team_stats: team_stats[h] = deque(maxlen=162)
-        team_stats[v].append(v_game_stat)
-        team_stats[h].append(h_game_stat)
-        
-        if v not in team_away_stats: team_away_stats[v] = deque(maxlen=162)
-        if h not in team_home_stats: team_home_stats[h] = deque(maxlen=162)
-        team_away_stats[v].append(v_game_stat)
-        team_home_stats[h].append(h_game_stat)
-        
-        if vp not in pitcher_stats: pitcher_stats[vp] = deque(maxlen=35)
-        if hp not in pitcher_stats: pitcher_stats[hp] = deque(maxlen=35)
-        pitcher_stats[vp].append({'date': date_dt, 'er': v_er, 'h': 6, 'bb': 2, 'k': 5, 'ip': 6.0, 'pc': 90})
-        pitcher_stats[hp].append({'date': date_dt, 'er': h_er, 'h': 6, 'bb': 2, 'k': 5, 'ip': 6.0, 'pc': 90})
-        
-        if p_id not in park_runs: park_runs[p_id] = deque(maxlen=100)
-        park_runs[p_id].append(row['v_score'] + row['h_score'])
-        league_runs.append(row['v_score'] + row['h_score'])
+            # Get actual stats from DB
+            v_p_stats = pitcher_games.get_group(gamePk)[pitcher_games.get_group(gamePk)['player_id'] == vp] if gamePk in pitcher_games.groups else pd.DataFrame()
+            h_p_stats = pitcher_games.get_group(gamePk)[pitcher_games.get_group(gamePk)['player_id'] == hp] if gamePk in pitcher_games.groups else pd.DataFrame()
+            
+            v_er = v_p_stats['ER'].iloc[0] if not v_p_stats.empty else row['h_score']
+            h_er = h_p_stats['ER'].iloc[0] if not h_p_stats.empty else row['v_score']
+            
+            v_p_s = max(0, min(1, 0.5 + (4.5 - v_er)/9))
+            h_p_s = max(0, min(1, 0.5 + (4.5 - h_er)/9))
+            
+            pitcher_elo[vp] = v_p_elo + K_PITCHER * (v_p_s - (1 - exp_h))
+            pitcher_elo[hp] = h_p_elo + K_PITCHER * (h_p_s - exp_h)
+            
+            # Bullpen Elo Update
+            v_bp_s = max(0, min(1, 0.5 + (4.5 - (row['h_score'] - v_er))/9))
+            h_bp_s = max(0, min(1, 0.5 + (4.5 - (row['v_score'] - h_er))/9))
+            bullpen_elo[v] = v_bp_elo + K_TEAM * (v_bp_s - (1 - exp_h))
+            bullpen_elo[h] = h_bp_elo + K_TEAM * (h_bp_s - exp_h)
+            
+            # Batter Elo
+            if v_batters:
+                v_off_s = max(0, min(1, 0.5 + (row['v_score'] - 4.5)/9))
+                for b in v_batters: batter_elo[b] = get_b_elo(b) + K_BATTER * (v_off_s - (1 - exp_h))
+            if h_batters:
+                h_off_s = max(0, min(1, 0.5 + (row['h_score'] - 4.5)/9))
+                for b in h_batters: batter_elo[b] = get_b_elo(b) + K_BATTER * (h_off_s - exp_h)
+                
+            # Update rolling stats
+            def get_team_stat(team, rs, ra, pk):
+                bat = batter_games.get_group(pk)[batter_games.get_group(pk)['team'] == team] if pk in batter_games.groups else pd.DataFrame()
+                if bat.empty:
+                    return {'date': date_dt, 'win': 1 if rs > ra else 0, 'rs': rs, 'ra': ra, 'err': 0, 'ab': 33, 'h': 8, '2b': 2, '3b': 0, 'hr': 1, 'bb': 3, 'sb': 0, 'cs': 0}
+                return {
+                    'date': date_dt, 'win': 1 if rs > ra else 0, 'rs': rs, 'ra': ra, 'err': 0,
+                    'ab': bat['AB'].sum(), 'h': bat['H'].sum(), '2b': 0, '3b': 0, 'hr': bat['HR'].sum(), 'bb': bat['BB'].sum(), 'sb': 0, 'cs': 0
+                }
+            
+            v_game_stat = get_team_stat(v, row['v_score'], row['h_score'], gamePk)
+            h_game_stat = get_team_stat(h, row['h_score'], row['v_score'], gamePk)
+            
+            if v not in team_stats: team_stats[v] = deque(maxlen=162)
+            if h not in team_stats: team_stats[h] = deque(maxlen=162)
+            team_stats[v].append(v_game_stat)
+            team_stats[h].append(h_game_stat)
+            
+            if v not in team_away_stats: team_away_stats[v] = deque(maxlen=162)
+            if h not in team_home_stats: team_home_stats[h] = deque(maxlen=162)
+            team_away_stats[v].append(v_game_stat)
+            team_home_stats[h].append(h_game_stat)
+            
+            if vp not in pitcher_stats: pitcher_stats[vp] = deque(maxlen=35)
+            if hp not in pitcher_stats: pitcher_stats[hp] = deque(maxlen=35)
+            
+            def get_pitcher_stat(p, er, p_stats):
+                if p_stats.empty:
+                    return {'date': date_dt, 'er': er, 'h': 6, 'bb': 2, 'k': 5, 'ip': 6.0, 'pc': 90}
+                return {
+                    'date': date_dt, 'er': er, 'h': p_stats['H'].iloc[0], 'bb': p_stats['BB'].iloc[0], 
+                    'k': p_stats['K'].iloc[0], 'ip': p_stats['IP'].iloc[0], 'pc': p_stats['pitch_count'].iloc[0]
+                }
+            
+            pitcher_stats[vp].append(get_pitcher_stat(vp, v_er, v_p_stats))
+            pitcher_stats[hp].append(get_pitcher_stat(hp, h_er, h_p_stats))
+            
+            if p_id not in park_runs: park_runs[p_id] = deque(maxlen=100)
+            park_runs[p_id].append(row['v_score'] + row['h_score'])
+            league_runs.append(row['v_score'] + row['h_score'])
 
     print("Saving features to database...")
     features_df = pd.DataFrame(features_list)
