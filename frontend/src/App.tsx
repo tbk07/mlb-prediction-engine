@@ -32,9 +32,9 @@ export default function App() {
   const [scouting, setScouting] = useState<Record<string, Scouting>>({});
 
   useEffect(() => {
-    fetch('http://localhost:8000/predictions').then(r => r.json()).then(setGames);
-    fetch('http://localhost:8000/elo-standings').then(r => r.json()).then(setStandings);
-    fetch('http://localhost:8000/history?year=2026').then(r => r.json()).then(setHistory);
+    fetch('/predictions').then(r => r.json()).then(setGames);
+    fetch('/elo-standings').then(r => r.json()).then(setStandings);
+    fetch('/history?year=2026').then(r => r.json()).then(setHistory);
   }, []);
 
   const toggleScouting = async (gamePk: string) => {
@@ -44,7 +44,7 @@ export default function App() {
     }
     setExpanded(gamePk);
     if (!scouting[gamePk]) {
-      const res = await fetch(`http://localhost:8000/game/${gamePk}/scouting`);
+      const res = await fetch(`/game/${gamePk}/scouting`);
       const data = await res.json();
       setScouting(s => ({ ...s, [gamePk]: data }));
     }

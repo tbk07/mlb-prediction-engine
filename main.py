@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import joblib
 import shap
 import json
@@ -18,6 +20,28 @@ app.add_middleware(
 
 DB_PATH = 'mlb.db'
 MODEL_PATH = 'best_model.pkl'
+
+# Serve static files from the frontend/dist directory if it exists
+if os.path.exists("frontend/dist"):
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+
+    @app.get("/favicon.svg")
+    async def favicon():
+        return FileResponse("frontend/dist/favicon.svg")
+
+    @app.get("/icons.svg")
+    async def icons():
+        return FileResponse("frontend/dist/icons.svg")
+
+@app.get("/")
+async def read_index():
+    if os.path.exists("frontend/dist/index.html"):
+        return FileResponse("frontend/dist/index.html")
+    return {
+        "status": "online",
+        "message": "MLB Prediction API is running.",
+        "info": "Frontend build not found. If this is a deployment, ensure 'npm run build' was executed in the frontend directory."
+    }
 
 # The exact 86 features used during training
 FEATURE_COLS = [
