@@ -112,9 +112,26 @@ Simulation assumptions:
 
 ## Balance Over Time
 
-The chart below shows bankroll growth across all 696 simulated bets.
+The chart below shows bankroll growth across all 696 simulated bets on 2026 MLB matches from 20th March 2026 to 13th May 2026.
+To see the specific matches visit the historical Audit section.
 
-[![MLB Betting Balance Chart](https://tbk07.github.io/MLB_CHART/chart.png)](https://tbk07.github.io/MLB_CHART/)
+```
+₹7,600 ┤                                                      ╭─╮
+       │                                               ╭──────╯  ╰──
+₹5,700 ┤                                        ╭─────╯
+       │                                  ╭─────╯
+₹3,800 ┤                           ╭──────╯
+       │                     ╭─────╯
+₹1,900 ┤             ╭───────╯
+       │    ╭─────────╯
+  ₹100 ┼────╯  ← break-even
+ -₹100 ┤╮ (early dip)
+       └┴──────────────────────────────────────────────────────────
+       0   100   200   300   400   500   600   696
+                        Game number
+```
+ 
+*(See the interactive chart in the project dashboard for the full game-by-game curve.)*
 
 ### Interactive Chart
 
