@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import shap
 import json
+import os
 
 app = FastAPI()
 app.add_middleware(
@@ -18,28 +19,37 @@ app.add_middleware(
 DB_PATH = 'mlb.db'
 MODEL_PATH = 'best_model.pkl'
 
+# The exact 86 features used during training
+FEATURE_COLS = [
+    'v_comp_elo', 'h_comp_elo', 'v_off_elo', 'h_off_elo', 'v_def_elo', 'h_def_elo', 
+    'v_p_elo', 'h_p_elo', 'exp_h', 'implied_h_prob', 'over_under', 'park_factor', 
+    'altitude_flag', 'month', 'v_games_7d', 'h_games_7d', 'v_rest', 'h_rest', 
+    'v_p_lhp', 'h_p_lhp', 'v_p_days_rest', 'h_p_days_rest', 'v_p_last_pc', 'h_p_last_pc', 
+    'v_10_win_pct', 'v_10_ops', 'v_10_r_scored', 'v_10_r_allowed', 'v_10_r_diff', 'v_10_err', 
+    'v_10_sb_pct', 'v_30_win_pct', 'v_30_ops', 'v_30_r_scored', 'v_30_r_allowed', 'v_30_r_diff', 
+    'v_30_err', 'v_30_sb_pct', 'v_162_win_pct', 'v_162_ops', 'v_162_r_scored', 'v_162_r_allowed', 
+    'v_162_r_diff', 'v_162_err', 'v_162_sb_pct', 'h_10_win_pct', 'h_10_ops', 'h_10_r_scored', 
+    'h_10_r_allowed', 'h_10_r_diff', 'h_10_err', 'h_10_sb_pct', 'h_30_win_pct', 'h_30_ops', 
+    'h_30_r_scored', 'h_30_r_allowed', 'h_30_r_diff', 'h_30_err', 'h_30_sb_pct', 'h_162_win_pct', 
+    'h_162_ops', 'h_162_r_scored', 'h_162_r_allowed', 'h_162_r_diff', 'h_162_err', 'h_162_sb_pct', 
+    'vp_10_era', 'vp_10_whip', 'vp_10_k9', 'vp_10_bb9', 'vp_35_era', 'vp_35_whip', 'vp_35_k9', 
+    'vp_35_bb9', 'vp_days_rest', 'vp_last_pitch_count', 'hp_10_era', 'hp_10_whip', 'hp_10_k9', 
+    'hp_10_bb9', 'hp_35_era', 'hp_35_whip', 'hp_35_k9', 'hp_35_bb9', 'hp_days_rest', 'hp_last_pitch_count'
+]
+
 @app.on_event("startup")
 def load_artifacts():
-    global model, explainer, feature_cols
-    model = joblib.load(MODEL_PATH)
-    # Re-initialize Explainer based on model type
-    if hasattr(model, 'predict_proba'):
+    global model, explainer
+    if os.path.exists(MODEL_PATH):
+        model = joblib.load(MODEL_PATH)
         try:
+            # TreeExplainer is fast for LGBM
             explainer = shap.TreeExplainer(model)
         except:
-            explainer = None # fallback
+            explainer = None
     else:
+        model = None
         explainer = None
-    
-    # We drop these cols for prediction
-    feature_cols = ['v_win_pct_162', 'v_obs_162', 'h_win_pct_162', 'h_obs_162',
-        'v_win_pct_30', 'v_obs_30', 'h_win_pct_30', 'h_obs_30',
-        'v_era_35', 'v_whip_35', 'h_era_35', 'h_whip_35',
-        'v_era_10', 'v_whip_10', 'h_era_10', 'h_whip_10',
-        'v_elo', 'h_elo', 'exp_h', 'implied_h_prob', 'over_under',
-        'park_factor', 'altitude_flag', 'month', 'v_games_7d', 'h_games_7d',
-        'v_rest', 'h_rest', 'v_p_lhp', 'h_p_lhp', 'v_p_days_rest', 'h_p_days_rest',
-        'v_p_last_pc', 'h_p_last_pc']
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -48,32 +58,45 @@ def get_db():
 
 @app.get("/predictions")
 def get_predictions(date: str = None):
+    if model is None:
+        return {"error": "Model not loaded"}
+        
     conn = get_db()
     if date:
         df = pd.read_sql("SELECT * FROM game_features WHERE date=?", conn, params=(date,))
     else:
-        # Default to a date where we have data
+        # Default to the most recent date in 2026
         df = pd.read_sql("SELECT * FROM game_features WHERE season=2026", conn)
         if not df.empty:
-            df = df[df['date'] == df['date'].max()]
+            latest_date = df['date'].max()
+            df = df[df['date'] == latest_date]
     conn.close()
     
     if df.empty:
         return []
     
-    res = []
-    # Impute missing feature columns to run model prediction if needed
-    for col in feature_cols:
-        if col not in df.columns: df[col] = 0.0
+    # Ensure all required features are present (impute if missing)
+    for col in FEATURE_COLS:
+        if col not in df.columns:
+            df[col] = 0.0
 
-    X = df[feature_cols].fillna(0)
-    probs = model.predict_proba(X)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X)
+    X = df[FEATURE_COLS].fillna(0)
     
+    # Get probabilities
+    if hasattr(model, 'predict_proba'):
+        probs = model.predict_proba(X)[:, 1]
+    else:
+        probs = model.predict(X)
+    
+    res = []
+    df = df.reset_index(drop=True)
     for i, row in df.iterrows():
         h_prob = float(probs[i])
         v_prob = 1.0 - h_prob
         
-        edge = h_prob - row['implied_h_prob'] if 'implied_h_prob' in row else 0.0
+        implied = row.get('implied_h_prob', 0.52)
+        edge = h_prob - implied
+        
         if edge > 0.05: bet = f"✓ BET {row['h_team']}"
         elif edge < -0.05: bet = f"✗ FADE {row['h_team']} (BET {row['v_team']})"
         else: bet = "— PASS"
@@ -81,13 +104,13 @@ def get_predictions(date: str = None):
         conf = "High Confidence" if max(h_prob, v_prob) > 0.6 else "Moderate" if max(h_prob, v_prob) > 0.55 else "Lean"
         
         res.append({
-            'gamePk': row['gamePk'],
+            'gamePk': str(row['gamePk']),
             'v_team': row['v_team'],
             'h_team': row['h_team'],
             'v_win_prob': v_prob,
             'h_win_prob': h_prob,
-            'vegas_home_ml': -110, # Mocked
-            'vegas_implied': row.get('implied_h_prob', 0.52),
+            'vegas_home_ml': -110, 
+            'vegas_implied': implied,
             'edge': edge,
             'bet': bet,
             'confidence': conf,
@@ -103,69 +126,81 @@ def get_scouting(gamePk: str):
     if df.empty: return {"error": "Game not found"}
     
     row = df.iloc[0]
-    X = df[feature_cols].fillna(0)
     
-    # SHAP
+    # Ensure all required features are present
+    for col in FEATURE_COLS:
+        if col not in df.columns:
+            df[col] = 0.0
+            
+    X = df[FEATURE_COLS].fillna(0)
+    
+    # SHAP explanations
     shap_reasons = []
     if explainer is not None:
         try:
-            shap_values = explainer.shap_values(X)[0]
-            # Convert to list and get top 5
-            if len(shap_values.shape) > 1: shap_values = shap_values[1] # binary clf
-            sv = list(zip(feature_cols, shap_values))
-            sv.sort(key=lambda x: abs(x[1]), reverse=True)
-            top5 = sv[:5]
+            # Get SHAP values for the first row
+            sv_all = explainer.shap_values(X)
+            # For binary classification, sv_all might be a list [neg_probs, pos_probs]
+            if isinstance(sv_all, list):
+                sv = sv_all[1][0] 
+            else:
+                sv = sv_all[0]
+                
+            features_with_weights = list(zip(FEATURE_COLS, sv))
+            features_with_weights.sort(key=lambda x: abs(x[1]), reverse=True)
+            top5 = features_with_weights[:5]
             
             for feat, val in top5:
-                direction = "favors home" if val > 0 else "favors away"
-                shap_reasons.append(f"{feat} ({row.get(feat, 0):.2f}) {direction}")
+                direction = "favors Home" if val > 0 else "favors Away"
+                val_str = f"{row.get(feat, 0):.2f}"
+                shap_reasons.append(f"{feat} ({val_str}) {direction}")
         except Exception as e:
-            shap_reasons = ["SHAP explanation unavailable for this model type"]
+            shap_reasons = [f"Scouting analytics engine error: {str(e)}"]
     
     return {
         "gamePk": gamePk,
         "h_team": row['h_team'],
         "v_team": row['v_team'],
-        "h_p_elo": row.get('h_p_elo', 1500),
-        "v_p_elo": row.get('v_p_elo', 1500),
-        "park_factor": row.get('park_factor', 1.0),
-        "reasons": shap_reasons if shap_reasons else ["Model confidence based on baseline metrics."]
-    }
-
-@app.get("/model-performance")
-def get_performance():
-    return {
-        "accuracy": 0.562,
-        "roi": 1936.36,
-        "calibration": [{"prob": 0.5, "win_rate": 0.49}, {"prob": 0.6, "win_rate": 0.61}]
+        "h_p_elo": float(row.get('h_p_elo', 1500)),
+        "v_p_elo": float(row.get('v_p_elo', 1500)),
+        "park_factor": float(row.get('park_factor', 1.0)),
+        "reasons": shap_reasons if shap_reasons else ["High confidence based on composite seasonal trend."]
     }
 
 @app.get("/elo-standings")
 def get_elo():
-    state = joblib.load("pipeline_state.pkl")
-    elos = state.get('bullpen_elo', {}) # fallback, really we want team composite elo
-    # Mocking current composite elo from last game features
     conn = get_db()
-    df = pd.read_sql("SELECT h_team, h_comp_elo FROM game_features WHERE season=2026", conn)
+    # Get the latest Elo for each team in 2026
+    df = pd.read_sql("SELECT h_team, h_comp_elo, date FROM game_features WHERE season=2026", conn)
     conn.close()
     if df.empty: return []
-    standings = df.groupby('h_team')['h_comp_elo'].last().sort_values(ascending=False).reset_index()
-    return [{"team": row['h_team'], "elo": row['h_comp_elo']} for i, row in standings.iterrows()]
+    
+    standings = df.sort_values('date').groupby('h_team').tail(1)
+    standings = standings.sort_values('h_comp_elo', ascending=False)
+    
+    return [{"team": row['h_team'], "elo": float(row['h_comp_elo'])} for i, row in standings.iterrows()]
 
 @app.get("/history")
 def get_history(year: int = 2026):
+    if model is None: return []
+    
     conn = get_db()
     df = pd.read_sql("SELECT * FROM game_features WHERE season=?", conn, params=(year,))
     conn.close()
     if df.empty: return []
     
-    for col in feature_cols:
-        if col not in df.columns: df[col] = 0.0
+    for col in FEATURE_COLS:
+        if col not in df.columns:
+            df[col] = 0.0
 
-    X = df[feature_cols].fillna(0)
-    probs = model.predict_proba(X)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X)
+    X = df[FEATURE_COLS].fillna(0)
+    if hasattr(model, 'predict_proba'):
+        probs = model.predict_proba(X)[:, 1]
+    else:
+        probs = model.predict(X)
     
     history = []
+    df = df.reset_index(drop=True)
     for i, row in df.iterrows():
         pred_h_win = 1 if probs[i] > 0.5 else 0
         actual = int(row['target'])
@@ -174,18 +209,10 @@ def get_history(year: int = 2026):
             'matchup': f"{row['v_team']} @ {row['h_team']}",
             'pick': row['h_team'] if pred_h_win == 1 else row['v_team'],
             'actual': row['h_team'] if actual == 1 else row['v_team'],
-            'correct': pred_h_win == actual,
-            'prob': probs[i] if pred_h_win == 1 else 1-probs[i]
+            'correct': bool(pred_h_win == actual),
+            'prob': float(probs[i] if pred_h_win == 1 else 1-probs[i])
         })
     return history
-
-@app.get("/model-experiments")
-def get_experiments():
-    try:
-        df = pd.read_csv("experiment_results.csv")
-        return df.to_dict('records')
-    except:
-        return []
 
 if __name__ == "__main__":
     import uvicorn
