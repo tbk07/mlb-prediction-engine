@@ -112,24 +112,27 @@ def load_artifacts():
         except Exception:
             explainer = None
     
-    # Run data pipeline and feature engineering automatically on startup
-    # This ensures Render always has the latest odds and predictions
-    try:
-        from pipeline.fetch_data import fetch_mlb_api_2026, fetch_odds
-        from pipeline.features import compute_features
-        
-        print("Startup: Updating MLB schedule and scores...")
-        fetch_mlb_api_2026()
-        
-        print("Startup: Fetching latest market odds...")
-        fetch_odds()
-        
-        print("Startup: Re-calculating model features...")
-        compute_features()
-        
-        print("Startup update complete. Application is ready.")
-    except Exception as e:
-        print(f"Startup update failed: {e}")
+    # Run data updates in a background thread so the server can bind to the port immediately
+    import threading
+    def run_updates():
+        try:
+            from pipeline.fetch_data import fetch_mlb_api_2026, fetch_odds
+            from pipeline.features import compute_features
+            
+            print("Background Startup: Updating MLB schedule and scores...")
+            fetch_mlb_api_2026()
+            
+            print("Background Startup: Fetching latest market odds...")
+            fetch_odds()
+            
+            print("Background Startup: Re-calculating model features...")
+            compute_features()
+            
+            print("Background Startup update complete.")
+        except Exception as e:
+            print(f"Background Startup update failed: {e}")
+
+    threading.Thread(target=run_updates, daemon=True).start()
 
 
 def get_db():
@@ -580,4 +583,5 @@ def get_history(year: int = None):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
