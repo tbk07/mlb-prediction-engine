@@ -20,3 +20,5 @@ catboost_info/
 .vscode/
 .idea/
 *.swp
+
+.env
