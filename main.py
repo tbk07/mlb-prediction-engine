@@ -65,8 +65,8 @@ def get_predictions(date: str = None):
     if date:
         df = pd.read_sql("SELECT * FROM game_features WHERE date=?", conn, params=(date,))
     else:
-        # Default to the most recent date in 2026
-        df = pd.read_sql("SELECT * FROM game_features WHERE season=2026", conn)
+        # Default to the most recent date with valid team names
+        df = pd.read_sql("SELECT * FROM game_features WHERE h_team != 'UNK' AND v_team != 'UNK' ORDER BY date DESC LIMIT 30", conn)
         if not df.empty:
             latest_date = df['date'].max()
             df = df[df['date'] == latest_date]
@@ -170,24 +170,32 @@ def get_scouting(gamePk: str):
 @app.get("/elo-standings")
 def get_elo():
     conn = get_db()
-    # Get the latest Elo for each team in 2026
-    df = pd.read_sql("SELECT h_team, h_comp_elo, date FROM game_features WHERE season=2026", conn)
+    # Get the latest Elo for each team from the most recent valid season
+    df = pd.read_sql("SELECT h_team, h_comp_elo, date, season FROM game_features WHERE h_team != 'UNK' ORDER BY date DESC", conn)
     conn.close()
     if df.empty: return []
     
+    latest_season = df['season'].iloc[0]
+    df = df[df['season'] == latest_season]
     standings = df.sort_values('date').groupby('h_team').tail(1)
     standings = standings.sort_values('h_comp_elo', ascending=False)
     
     return [{"team": row['h_team'], "elo": float(row['h_comp_elo'])} for i, row in standings.iterrows()]
 
 @app.get("/history")
-def get_history(year: int = 2026):
+def get_history(year: int = None):
     if model is None: return []
     
     conn = get_db()
-    df = pd.read_sql("SELECT * FROM game_features WHERE season=?", conn, params=(year,))
+    if year:
+        df = pd.read_sql("SELECT * FROM game_features WHERE season=? AND h_team != 'UNK'", conn, params=(year,))
+    else:
+        # Latest valid season
+        df_latest = pd.read_sql("SELECT season FROM game_features WHERE h_team != 'UNK' ORDER BY date DESC LIMIT 1", conn)
+        if df_latest.empty: return []
+        latest_year = int(df_latest['season'].iloc[0])
+        df = pd.read_sql("SELECT * FROM game_features WHERE season=? AND h_team != 'UNK'", conn, params=(latest_year,))
     conn.close()
-    if df.empty: return []
     
     for col in FEATURE_COLS:
         if col not in df.columns:
