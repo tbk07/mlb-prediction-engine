@@ -5,6 +5,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 import os
+import datetime
 
 DB_PATH = 'mlb.db'
 
@@ -50,10 +51,9 @@ def import_retrosheet():
 def fetch_mlb_api_2026():
     print("Fetching all 2026 games from MLB API...")
     conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
+    cursor = conn.cursor()   
     start_date = "2026-03-20"
-    end_date = "2026-11-01"
+    end_date = datetime.date.today().strftime("%Y-%m-%d")
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={start_date}&endDate={end_date}"
     resp = requests.get(url).json()
     
