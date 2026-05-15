@@ -80,7 +80,7 @@ def fetch_mlb_api_2026():
 
 def fetch_odds():
     print("Fetching real market odds from The Odds API...")
-    api_key = os.getenv("ODDS_API_KEY", "c2579f99456f2494eb6ca76e6f649fd2")
+    api_key = os.getenv("ODDS_API_KEY")
     url = f"https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/?apiKey={api_key}&regions=us&markets=h2h,totals&oddsFormat=american"
     
     try:

@@ -8,8 +8,7 @@ __pycache__/
 venv/
 ENV/
 env.bak/
-env/
-
+env
 # ML/Data files
 *.db
 *.pkl
@@ -20,5 +19,6 @@ catboost_info/
 .vscode/
 .idea/
 *.swp
+
 
 .env
