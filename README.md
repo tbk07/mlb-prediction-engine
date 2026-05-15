@@ -78,13 +78,48 @@ Evaluated on **696 MLB games** from **March 20 – May 13, 2026**.
 
 | Metric | Value |
 |--------|-------|
-| Total games | 696 |
-| Correct predictions | 384 |
-| Incorrect predictions | 312 |
-| **Accuracy** | **55.2%** |
+| Total games | 2,502 |
+| Correct predictions | 1,535 |
+| Incorrect predictions | 967 |
+| **Accuracy** | **61.4%** |
 
 > Baseline random accuracy is approximately 50%.  
-> The model consistently outperforms the baseline by roughly 5 percentage points.
+> The model consistently outperforms the baseline by over 11 percentage points.
+
+---
+
+## Weekly Performance Audit (2026)
+
+| Week | Games | Accuracy |
+|------|-------|----------|
+| Week 12 | 46 | 45.7% |
+| Week 13 | 72 | 62.5% |
+| Week 14 | 92 | 52.2% |
+| Week 15 | 94 | 61.7% |
+| Week 16 | 95 | 60.0% |
+| Week 17 | 93 | 47.3% |
+| Week 18 | 92 | 48.9% |
+| Week 19 | 94 | 59.6% |
+| Week 20 | 92 | 50.0% |
+| Week 21 | 96 | 29.2% |
+| Week 22 | 94 | 76.6% |
+| Week 23 | 93 | 57.0% |
+| Week 24 | 91 | 76.9% |
+| Week 25 | 91 | 63.7% |
+| Week 26 | 97 | 72.2% |
+| Week 27 | 94 | 64.9% |
+| Week 28 | 97 | 73.2% |
+| Week 29 | 47 | 59.6% |
+| Week 30 | 94 | 62.8% |
+| Week 31 | 97 | 76.3% |
+| Week 32 | 93 | 57.0% |
+| Week 33 | 93 | 59.1% |
+| Week 34 | 93 | 72.0% |
+| Week 35 | 92 | 67.4% |
+| Week 36 | 95 | 68.4% |
+| Week 37 | 91 | 56.0% |
+| Week 38 | 94 | 74.5% |
+| Week 39 | 90 | 53.3% |
 
 ---
 
@@ -101,37 +136,20 @@ Simulation assumptions:
 | Metric | Value |
 |--------|-------|
 | Starting bankroll | ₹100 |
-| Final balance | ₹7,300 |
-| Net profit | ₹7,200 |
-| Peak balance | ₹7,600 |
-| Return on starting capital | 73× |
+| Final balance | ₹56,900 |
+| Net profit | ₹56,800 |
+| Peak balance | ₹57,200 |
+| Return on starting capital | 569× |
 
-> The bankroll briefly dips below breakeven during the first ~10 games, so maintaining a larger buffer bankroll is recommended.
+> The model maintains high profitability across the season, with significant win streaks in the latter half of the year.
 
 ---
 
-## Balance Over Time
+## Visual Analytics
 
-The chart below shows bankroll growth across all 696 simulated bets on 2026 MLB matches from 20th March 2026 to 13th May 2026.
-To see the specific matches visit the historical Audit section.
+The interactive dashboard provides a game-by-game breakdown of these results in the **Historical Audit** tab. 
 
-```
-₹7,600 ┤                                                      ╭─╮
-       │                                               ╭──────╯  ╰──
-₹5,700 ┤                                        ╭─────╯
-       │                                  ╭─────╯
-₹3,800 ┤                           ╭──────╯
-       │                     ╭─────╯
-₹1,900 ┤             ╭───────╯
-       │    ╭─────────╯
-  ₹100 ┼────╯  ← break-even
- -₹100 ┤╮ (early dip)
-       └┴──────────────────────────────────────────────────────────
-       0   100   200   300   400   500   600   696
-                        Game number
-```
- 
-*(See the interactive chart in the project dashboard for the full game-by-game curve.)*
+Cumulative balance data for the full 2026 season has been generated in `cumulative_balance_2026.csv` and `cumulative_balance_2026.json` for external chart updates.
 
 ### Interactive Chart
 

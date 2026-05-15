@@ -54,26 +54,36 @@ def fetch_mlb_api_2026():
     cursor = conn.cursor()   
     start_date = "2026-03-20"
     end_date = datetime.date.today().strftime("%Y-%m-%d")
-    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={start_date}&endDate={end_date}"
+    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={start_date}&endDate={end_date}&hydrate=probablePitcher"
     resp = requests.get(url).json()
     
     for date_item in resp.get('dates', []):
         for game in date_item.get('games', []):
             gamePk = str(game['gamePk'])
-            away_id = game['teams']['away']['team']['id']
-            home_id = game['teams']['home']['team']['id']
+            away = game['teams']['away']
+            home = game['teams']['home']
+            away_id = away['team']['id']
+            home_id = home['team']['id']
             
             v_team = MLB_TEAM_ID_TO_ABBR.get(away_id, "UNK")
             h_team = MLB_TEAM_ID_TO_ABBR.get(home_id, "UNK")
             
-            v_score = game['teams']['away'].get('score', 0)
-            h_score = game['teams']['home'].get('score', 0)
+            v_score = away.get('score', 0)
+            h_score = home.get('score', 0)
             status = game.get('status', {}).get('abstractGameState', 'Unknown')
             
+            v_p_starter = away.get('probablePitcher', {}).get('id')
+            h_p_starter = home.get('probablePitcher', {}).get('id')
+            
+            # Note: Hand is not easily available here without more hydration or separate lookups.
+            # We'll default to 'R' if unknown, but better than NULL.
+            v_p_hand = 'R'
+            h_p_hand = 'R'
+
             cursor.execute('''
-            INSERT OR REPLACE INTO games (gamePk, date, season, v_team, h_team, v_score, h_score, status)
-            VALUES (?, ?, 2026, ?, ?, ?, ?, ?)
-            ''', (gamePk, date_item['date'], v_team, h_team, v_score, h_score, status))
+            INSERT OR REPLACE INTO games (gamePk, date, season, v_team, h_team, v_score, h_score, status, v_p_starter, h_p_starter, v_p_hand, h_p_hand)
+            VALUES (?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (gamePk, date_item['date'], v_team, h_team, v_score, h_score, status, v_p_starter, h_p_starter, v_p_hand, h_p_hand))
                         
     conn.commit()
     conn.close()

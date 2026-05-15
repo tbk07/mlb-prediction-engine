@@ -61,8 +61,9 @@ ESPN_LOGO_CODES = {
 
 FEATURE_COLS = [
     "v_comp_elo", "h_comp_elo", "v_off_elo", "h_off_elo", "v_def_elo", "h_def_elo",
-    "v_p_elo", "h_p_elo", "exp_h", "implied_h_prob", "over_under", "park_factor",
-    "altitude_flag", "month", "v_games_7d", "h_games_7d", "v_rest", "h_rest",
+    "v_p_elo", "h_p_elo", "v_bp_elo", "h_bp_elo", "exp_h", "over_under", "park_factor",
+    "altitude_flag", "temp", "month", "v_games_7d", "h_games_7d", "v_rest", "h_rest",
+    "v_dist", "h_dist", "h_back_home",
     "v_p_lhp", "h_p_lhp", "v_p_days_rest", "h_p_days_rest", "v_p_last_pc", "h_p_last_pc",
     "v_10_win_pct", "v_10_ops", "v_10_r_scored", "v_10_r_allowed", "v_10_r_diff", "v_10_err",
     "v_10_sb_pct", "v_30_win_pct", "v_30_ops", "v_30_r_scored", "v_30_r_allowed", "v_30_r_diff",
@@ -439,6 +440,10 @@ def get_scouting(gamePk: str):
         "v_team": row["v_team"],
         "h_p_elo": float(row.get("h_p_elo", 1500)),
         "v_p_elo": float(row.get("v_p_elo", 1500)),
+        "h_bp_elo": float(row.get("h_bp_elo", 1500)),
+        "v_bp_elo": float(row.get("v_bp_elo", 1500)),
+        "h_off_elo": float(row.get("h_off_elo", 1500)),
+        "v_off_elo": float(row.get("v_off_elo", 1500)),
         "park_factor": float(row.get("park_factor", 1.0)),
         "reasons": shap_reasons if shap_reasons else ["High confidence based on composite seasonal trend."],
     }
@@ -450,11 +455,11 @@ def get_elo(year: int = None):
     selected_year = year or datetime.now().year
     df = pd.read_sql(
         """
-        SELECT h_team AS team, h_comp_elo AS elo, date, season
+        SELECT h_team AS team, h_comp_elo AS elo, h_off_elo AS off_elo, h_def_elo AS def_elo, h_p_elo AS p_elo, h_bp_elo AS bp_elo, date, season
         FROM game_features
         WHERE h_team != 'UNK' AND season = ?
         UNION ALL
-        SELECT v_team AS team, v_comp_elo AS elo, date, season
+        SELECT v_team AS team, v_comp_elo AS elo, v_off_elo AS off_elo, v_def_elo AS def_elo, v_p_elo AS p_elo, v_bp_elo AS bp_elo, date, season
         FROM game_features
         WHERE v_team != 'UNK' AND season = ?
         """,
@@ -462,20 +467,19 @@ def get_elo(year: int = None):
         params=(selected_year, selected_year),
     )
     if df.empty:
-        live_elo = build_current_season_elo(selected_year)
-        if live_elo:
-            conn.close()
-            return live_elo
-
+        # Fallback to latest available season
         df_latest = pd.read_sql("SELECT MAX(season) AS season FROM game_features WHERE h_team != 'UNK'", conn)
-        latest_season = int(df_latest["season"].iloc[0]) if not df_latest.empty and df_latest["season"].iloc[0] else selected_year
+        if df_latest.empty or not df_latest["season"].iloc[0]:
+            conn.close()
+            return []
+        latest_season = int(df_latest["season"].iloc[0])
         df = pd.read_sql(
             """
-            SELECT h_team AS team, h_comp_elo AS elo, date, season
+            SELECT h_team AS team, h_comp_elo AS elo, h_off_elo AS off_elo, h_def_elo AS def_elo, h_p_elo AS p_elo, h_bp_elo AS bp_elo, date, season
             FROM game_features
             WHERE h_team != 'UNK' AND season = ?
             UNION ALL
-            SELECT v_team AS team, v_comp_elo AS elo, date, season
+            SELECT v_team AS team, v_comp_elo AS elo, v_off_elo AS off_elo, v_def_elo AS def_elo, v_p_elo AS p_elo, v_bp_elo AS bp_elo, date, season
             FROM game_features
             WHERE v_team != 'UNK' AND season = ?
             """,
@@ -493,6 +497,10 @@ def get_elo(year: int = None):
             "team": row["team"],
             "team_info": team_payload(row["team"]),
             "elo": float(row["elo"]),
+            "off_elo": float(row.get("off_elo", 1500)),
+            "def_elo": float(row.get("def_elo", 1500)),
+            "p_elo": float(row.get("p_elo", 1500)),
+            "bp_elo": float(row.get("bp_elo", 1500)),
             "date": row["date"],
             "season": int(row["season"]),
         }
@@ -503,7 +511,7 @@ def get_elo(year: int = None):
 @app.get("/history")
 def get_history(year: int = None):
     if model is None:
-        return []
+        return {"history": [], "summary": {}}
 
     selected_year = year
     schedule = []
@@ -520,7 +528,7 @@ def get_history(year: int = None):
         df_latest = pd.read_sql("SELECT season FROM game_features WHERE h_team != 'UNK' ORDER BY date DESC LIMIT 1", conn)
         if df_latest.empty:
             conn.close()
-            return []
+            return {"history": [], "summary": {}}
         latest_year = int(df_latest["season"].iloc[0])
         df = pd.read_sql("SELECT * FROM game_features WHERE season=? AND h_team != 'UNK'", conn, params=(latest_year,))
 
@@ -531,27 +539,39 @@ def get_history(year: int = None):
     history = []
     schedule_by_pk = {item["gamePk"]: item for item in schedule}
 
+    total_correct = 0
+    total_games = 0
+    weekly_stats = {}
+
     for i, row in df.reset_index(drop=True).iterrows():
         odds_row = odds_map.get(str(row["gamePk"]))
         odds_available = bool(odds_row) and not is_default_odds(odds_row["home_ml"], odds_row["away_ml"], odds_row["over_under"])
         
         pred_h_win = 1 if probs[i] > 0.5 else 0
-        actual = int(row["target"])
+        target = row.get("target")
+        
+        is_correct = None
+        actual_team = None
+        if target is not None and not pd.isna(target):
+            actual = int(target)
+            is_correct = bool(pred_h_win == actual)
+            actual_team = row["h_team"] if actual == 1 else row["v_team"]
+            
         scheduled = schedule_by_pk.pop(str(row["gamePk"]), None)
         
         history.append({
             "gamePk": str(row["gamePk"]),
             "date": row["date"],
             "game_datetime": scheduled.get("game_datetime") if scheduled else row["date"],
-            "status": scheduled.get("status") if scheduled else "Final",
+            "status": scheduled.get("status") if scheduled else ("Final" if is_correct is not None else "Preview"),
             "v_team": row["v_team"],
             "h_team": row["h_team"],
             "v_team_info": scheduled.get("v_team_info") if scheduled else team_payload(row["v_team"]),
             "h_team_info": scheduled.get("h_team_info") if scheduled else team_payload(row["h_team"]),
             "matchup": f"{TEAM_FULL_NAMES.get(row['v_team'], row['v_team'])} @ {TEAM_FULL_NAMES.get(row['h_team'], row['h_team'])}",
             "pick": row["h_team"] if pred_h_win == 1 else row["v_team"],
-            "actual": row["h_team"] if actual == 1 else row["v_team"],
-            "correct": bool(pred_h_win == actual),
+            "actual": actual_team,
+            "correct": is_correct,
             "prob": float(probs[i] if pred_h_win == 1 else 1 - probs[i]),
             "vegas_home_ml": odds_row["home_ml"] if odds_available else "N/A",
             "vegas_away_ml": odds_row["away_ml"] if odds_available else "N/A",
@@ -576,8 +596,32 @@ def get_history(year: int = None):
             "vegas_away_ml": None,
         })
 
+    # Only show completed games in the audit history
+    history = [h for h in history if h["correct"] is not None]
     history.sort(key=lambda item: (item.get("game_datetime") or item["date"], item["gamePk"]))
-    return history
+    
+    total_correct = sum(1 for h in history if h["correct"])
+    total_games = len(history)
+    
+    weekly_stats = {}
+    for h in history:
+        date_dt = pd.to_datetime(h["date"])
+        week_str = f"Week {date_dt.isocalendar()[1]} ({date_dt.year})"
+        if week_str not in weekly_stats:
+            weekly_stats[week_str] = {"correct": 0, "total": 0}
+        weekly_stats[week_str]["correct"] += 1 if h["correct"] else 0
+        weekly_stats[week_str]["total"] += 1
+
+    summary = {
+        "total_accuracy": (total_correct / total_games) if total_games > 0 else 0,
+        "total_games": total_games,
+        "weekly": sorted(
+            [{"week": k, "accuracy": v["correct"] / v["total"], "games": v["total"]} for k, v in weekly_stats.items()],
+            key=lambda x: x["week"]
+        )
+    }
+    
+    return {"history": history, "summary": summary}
 
 
 if __name__ == "__main__":

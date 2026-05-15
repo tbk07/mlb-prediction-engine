@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ChevronDown, ChevronUp, TrendingUp, History } from 'lucide-react';
 
 interface Game {
@@ -55,6 +54,10 @@ interface Scouting {
   reasons: string[];
   h_p_elo: number;
   v_p_elo: number;
+  h_bp_elo: number;
+  v_bp_elo: number;
+  h_off_elo: number;
+  v_off_elo: number;
   park_factor: number;
 }
 
@@ -63,13 +66,17 @@ export default function App() {
   const [games, setGames] = useState<Game[]>([]);
   const [standings, setStandings] = useState<any[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [historySummary, setHistorySummary] = useState<any>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [scouting, setScouting] = useState<Record<string, Scouting>>({});
 
   useEffect(() => {
     fetch('/predictions').then(r => r.json()).then(setGames);
     fetch('/elo-standings').then(r => r.json()).then(setStandings);
-    fetch('/history?year=2026').then(r => r.json()).then(setHistory);
+    fetch('/history?year=2026').then(r => r.json()).then(data => {
+      setHistory(data.history || []);
+      setHistorySummary(data.summary || null);
+    });
   }, []);
 
   const toggleScouting = async (gamePk: string) => {
@@ -207,9 +214,19 @@ export default function App() {
                   <ul>
                     {scouting[g.gamePk].reasons.map((r, i) => <li key={i}>{r}</li>)}
                   </ul>
-                  <div style={{ marginTop: '1rem' }}>
-                    <strong>Pitching Matchup (Elo):</strong><br/>
-                    Away P: {scouting[g.gamePk].v_p_elo.toFixed(0)} | Home P: {scouting[g.gamePk].h_p_elo.toFixed(0)}
+                  <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.85rem' }}>
+                    <div>
+                      <strong>Away Elo Ratings:</strong><br/>
+                      Pitching: {(scouting[g.gamePk].v_p_elo || 0).toFixed(0)}<br/>
+                      Bullpen: {(scouting[g.gamePk].v_bp_elo || 0).toFixed(0)}<br/>
+                      Offense: {(scouting[g.gamePk].v_off_elo || 0).toFixed(0)}
+                    </div>
+                    <div>
+                      <strong>Home Elo Ratings:</strong><br/>
+                      Pitching: {(scouting[g.gamePk].h_p_elo || 0).toFixed(0)}<br/>
+                      Bullpen: {(scouting[g.gamePk].h_bp_elo || 0).toFixed(0)}<br/>
+                      Offense: {(scouting[g.gamePk].h_off_elo || 0).toFixed(0)}
+                    </div>
                   </div>
                 </div>
               )}
@@ -220,23 +237,68 @@ export default function App() {
       )}
 
       {activeTab === 'standings' && (
-        <div className="card" style={{ height: '600px' }}>
-          <h2>Team Composite Elo Standings</h2>
-          <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={standings.slice(0, 15)} layout="vertical" margin={{ left: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
-              <XAxis type="number" domain={['dataMin - 50', 'dataMax + 50']} stroke="#a0aec0" />
-              <YAxis dataKey="team" type="category" stroke="#a0aec0" />
-              <Tooltip contentStyle={{ background: '#151b2b', border: '1px solid #2d3748' }} />
-              <Bar dataKey="elo" fill="#00d26a" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="card">
+          <h2>Detailed Elo Standings</h2>
+          <div className="table-summary">Real-time ratings based on rolling performance and platoon adjustments.</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '0.8rem' }}>Team</th>
+                  <th style={{ padding: '0.8rem' }}>Composite</th>
+                  <th style={{ padding: '0.8rem' }}>Offense</th>
+                  <th style={{ padding: '0.8rem' }}>Defense</th>
+                  <th style={{ padding: '0.8rem' }}>Starter</th>
+                  <th style={{ padding: '0.8rem' }}>Bullpen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standings.map((s, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.8rem' }}>
+                      <div className="history-matchup">
+                        <TeamLogo team={s.team_info} /> {s.team_info.full_name}
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.8rem', fontWeight: 'bold', color: 'var(--accent-green)' }}>{(s.elo || 0).toFixed(0)}</td>
+                    <td style={{ padding: '0.8rem' }}>{(s.off_elo || 0).toFixed(0)}</td>
+                    <td style={{ padding: '0.8rem' }}>{(s.def_elo || 0).toFixed(0)}</td>
+                    <td style={{ padding: '0.8rem' }}>{(s.p_elo || 0).toFixed(0)}</td>
+                    <td style={{ padding: '0.8rem' }}>{(s.bp_elo || 0).toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {activeTab === 'history' && (
         <div className="card">
           <h2>2026 Historical Audit</h2>
+          {historySummary && (
+            <div className="accuracy-summary" style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Total Accuracy</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent-green)' }}>{(historySummary.total_accuracy * 100).toFixed(1)}%</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>on {historySummary.total_games} games</div>
+                </div>
+                <div style={{ flex: 1, minWidth: '300px' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Weekly Breakdown</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                    {historySummary.weekly.map((w: any, i: number) => (
+                      <div key={i} style={{ minWidth: '100px', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{w.week.split(' ')[1]}</div>
+                        <div style={{ fontWeight: 'bold', color: w.accuracy > 0.55 ? 'var(--accent-green)' : 'inherit' }}>{(w.accuracy * 100).toFixed(0)}%</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{w.games} games</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="table-summary">Showing {history.length} MLB games from the 2026 season schedule.</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
