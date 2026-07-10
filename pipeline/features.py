@@ -124,10 +124,10 @@ def compute_features():
     DEFAULT_ELO = 1500
     
     def get_p_elo(p, team): 
-        if p is None: return team_starter_elo.get(team, DEFAULT_ELO)
+        if pd.isna(p) or p is None: return team_starter_elo.get(team, DEFAULT_ELO)
         return pitcher_elo.get(str(p), team_starter_elo.get(team, DEFAULT_ELO))
     def get_b_elo(b, hand): 
-        if b is None: return DEFAULT_ELO
+        if pd.isna(b) or b is None: return DEFAULT_ELO
         if hand == 'L': return batter_elo_lhp.get(str(b), DEFAULT_ELO)
         return batter_elo_rhp.get(str(b), DEFAULT_ELO)
     def get_bp_elo(t): 
