@@ -74,7 +74,8 @@ export default function App() {
   useEffect(() => {
     fetch('/predictions').then(r => r.json()).then(data => {
       setGames(data);
-      if (data.length === 0) {
+      // Only show the All-Star break modal if it's July (month index 6)
+      if (data.length === 0 && new Date().getMonth() === 6) {
         setShowModal(true);
       }
     });
