@@ -69,9 +69,15 @@ export default function App() {
   const [historySummary, setHistorySummary] = useState<any>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [scouting, setScouting] = useState<Record<string, Scouting>>({});
+  const [showModal, setShowModal] = useState<boolean>(false);
 
   useEffect(() => {
-    fetch('/predictions').then(r => r.json()).then(setGames);
+    fetch('/predictions').then(r => r.json()).then(data => {
+      setGames(data);
+      if (data.length === 0) {
+        setShowModal(true);
+      }
+    });
     fetch('/elo-standings').then(r => r.json()).then(setStandings);
     fetch('/history?year=2026').then(r => r.json()).then(data => {
       setHistory(data.history || []);
@@ -234,12 +240,8 @@ export default function App() {
           ))}
           {games.length === 0 && (
             <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-              <h3>No Games Scheduled Today</h3>
-              <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: '1.5' }}>
-                There are no MLB games currently loaded. If it's mid-July, this is due to the <strong>MLB All-Star Break</strong>!
-                <br /><br />
-                During the break, there are no active regular-season games, so The Odds API does not return any active moneyline or totals markets. Once the second half of the season resumes, your odds and predictions will automatically reappear here.
-              </p>
+              <h3>No Games Today</h3>
+              <p style={{ color: 'var(--text-secondary)' }}>Games will resume after the All-Star break.</p>
             </div>
           )}
         </div>
@@ -341,6 +343,34 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {showModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', 
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: '500px', margin: '20px', position: 'relative', background: '#1e1e24', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem' }}>
+            <button 
+              onClick={() => setShowModal(false)}
+              style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-secondary)' }}
+            >&times;</button>
+            <h3 style={{ marginTop: 0 }}>No Games Scheduled Today</h3>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '1rem', lineHeight: '1.6' }}>
+              There are no MLB games currently loaded. If it's mid-July, this is due to the <strong>MLB All-Star Break</strong>!
+              <br /><br />
+              During the break, there are no active regular-season games, so The Odds API does not return any active moneyline or totals markets. Once the second half of the season resumes, your odds and predictions will automatically reappear here.
+            </p>
+            <button 
+              onClick={() => setShowModal(false)}
+              style={{ width: '100%', marginTop: '1.5rem', padding: '0.75rem', background: 'var(--accent-blue)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
