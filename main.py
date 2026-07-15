@@ -392,12 +392,8 @@ def get_predictions(date: str = None):
     if date:
         df = pd.read_sql("SELECT * FROM game_features WHERE date=?", conn, params=(date,))
     else:
-        df = pd.read_sql(
-            "SELECT * FROM game_features WHERE h_team != 'UNK' AND v_team != 'UNK' ORDER BY date DESC LIMIT 30",
-            conn,
-        )
-        if not df.empty:
-            df = df[df["date"] == df["date"].max()]
+        conn.close()
+        return []
 
     if df.empty:
         conn.close()
