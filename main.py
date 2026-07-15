@@ -117,8 +117,11 @@ def load_artifacts():
     import threading
     def run_updates():
         try:
-            from pipeline.fetch_data import fetch_mlb_api_2026, fetch_odds
+            from pipeline.fetch_data import init_db, fetch_mlb_api_2026, fetch_odds
             from pipeline.features import compute_features
+            
+            print("Background Startup: Initializing database...")
+            init_db()
             
             print("Background Startup: Updating MLB schedule and scores...")
             fetch_mlb_api_2026()

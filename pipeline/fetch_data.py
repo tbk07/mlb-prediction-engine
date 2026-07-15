@@ -95,8 +95,15 @@ def fetch_odds():
     
     try:
         resp = requests.get(url).json()
+        if isinstance(resp, dict) and "message" in resp:
+            print(f"Odds API Error: {resp.get('message')}")
+            return
     except Exception as e:
         print(f"Error fetching odds: {e}")
+        return
+
+    if not isinstance(resp, list):
+        print(f"Unexpected Odds API response format: {type(resp)}")
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -109,7 +116,7 @@ def fetch_odds():
         "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KCA",
         "Los Angeles Angels": "ANA", "Los Angeles Dodgers": "LAN", "Miami Marlins": "MIA",
         "Milwaukee Brewers": "MIL", "Minnesota Twins": "MIN", "New York Yankees": "NYA",
-        "New York Mets": "NYN", "Oakland Athletics": "OAK", "Philadelphia Phillies": "PHI",
+        "New York Mets": "NYN", "Oakland Athletics": "OAK", "Athletics": "OAK", "Philadelphia Phillies": "PHI",
         "Pittsburgh Pirates": "PIT", "San Diego Padres": "SDN", "San Francisco Giants": "SFN",
         "Seattle Mariners": "SEA", "St. Louis Cardinals": "SLN", "Tampa Bay Rays": "TBA",
         "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WAS"
@@ -124,15 +131,27 @@ def fetch_odds():
         away_team = name_to_abbr.get(game['away_team'])
         if not home_team or not away_team: continue
         
-        game_date = game['commence_time'].split('T')[0]
+        game_date_utc = game['commence_time'].split('T')[0]
         match = None
         for g in db_games:
-            if g[1] == away_team and g[2] == home_team and g[3] == game_date:
-                match = g[0]
-                break
+            # Match if teams are correct and date is within 1 day (handles UTC rollover)
+            db_date = g[3]
+            if g[1] == away_team and g[2] == home_team:
+                try:
+                    d1 = datetime.datetime.strptime(db_date, "%Y-%m-%d")
+                    d2 = datetime.datetime.strptime(game_date_utc, "%Y-%m-%d")
+                    if abs((d1 - d2).days) <= 1:
+                        match = g[0]
+                        print(f"Matched {away_team}@{home_team}: API {game_date_utc}, DB {db_date} -> {match}")
+                        break
+                except Exception as e:
+                    print(f"Match error: {e}")
+                    if db_date == game_date_utc:
+                        match = g[0]
+                        break
         
         if not match: continue
-
+   
         if not game['bookmakers']: continue
         bm = game['bookmakers'][0]
         

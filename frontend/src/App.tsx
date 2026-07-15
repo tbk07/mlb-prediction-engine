@@ -232,7 +232,16 @@ export default function App() {
               )}
             </div>
           ))}
-          {games.length === 0 && <div className="card">No games loaded. Check backend.</div>}
+          {games.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+              <h3>No Games Scheduled Today</h3>
+              <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                There are no MLB games currently loaded. If it's mid-July, this is due to the <strong>MLB All-Star Break</strong>!
+                <br /><br />
+                During the break, there are no active regular-season games, so The Odds API does not return any active moneyline or totals markets. Once the second half of the season resumes, your odds and predictions will automatically reappear here.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
