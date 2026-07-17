@@ -133,22 +133,28 @@ def fetch_odds():
         
         game_date_utc = game['commence_time'].split('T')[0]
         match = None
+        
+        # First try exact date match
         for g in db_games:
-            # Match if teams are correct and date is within 1 day (handles UTC rollover)
-            db_date = g[3]
-            if g[1] == away_team and g[2] == home_team:
-                try:
-                    d1 = datetime.datetime.strptime(db_date, "%Y-%m-%d")
-                    d2 = datetime.datetime.strptime(game_date_utc, "%Y-%m-%d")
-                    if abs((d1 - d2).days) <= 1:
-                        match = g[0]
-                        print(f"Matched {away_team}@{home_team}: API {game_date_utc}, DB {db_date} -> {match}")
-                        break
-                except Exception as e:
-                    print(f"Match error: {e}")
-                    if db_date == game_date_utc:
-                        match = g[0]
-                        break
+            if g[1] == away_team and g[2] == home_team and g[3] == game_date_utc:
+                match = g[0]
+                print(f"Matched {away_team}@{home_team}: API {game_date_utc}, DB {g[3]} -> {match} (Exact)")
+                break
+                
+        # If no exact match, try within 1 day (handles UTC rollover)
+        if not match:
+            for g in db_games:
+                db_date = g[3]
+                if g[1] == away_team and g[2] == home_team:
+                    try:
+                        d1 = datetime.datetime.strptime(db_date, "%Y-%m-%d")
+                        d2 = datetime.datetime.strptime(game_date_utc, "%Y-%m-%d")
+                        if abs((d1 - d2).days) <= 1:
+                            match = g[0]
+                            print(f"Matched {away_team}@{home_team}: API {game_date_utc}, DB {db_date} -> {match} (Fuzzy)")
+                            break
+                    except Exception as e:
+                        pass
         
         if not match: continue
    
